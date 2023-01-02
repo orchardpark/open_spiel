@@ -1,6 +1,8 @@
 set(GAME_SOURCES
   2048.cc
   2048.h
+  airline_seats.cc
+  airline_seats.h
   amazons.cc
   amazons.h
   backgammon.cc
@@ -269,6 +271,10 @@ target_compile_definitions(bridge_double_dummy_solver PUBLIC DDS_NO_STATIC_INIT)
 add_executable(2048_test 2048_test.cc ${OPEN_SPIEL_OBJECTS}
                $<TARGET_OBJECTS:tests>)
 add_test(2048_test 2048_test)
+
+add_executable(airline_seats_test airline_seats_test.cc ${OPEN_SPIEL_OBJECTS}
+        $<TARGET_OBJECTS:tests>)
+add_test(airline_seats_test airline_seats_test)
 
 add_executable(amazons_test amazons_test.cc ${OPEN_SPIEL_OBJECTS}
                $<TARGET_OBJECTS:tests>)
