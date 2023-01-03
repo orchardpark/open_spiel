@@ -33,9 +33,23 @@ namespace airline_seats {
 
 enum class GamePhase
 {
+    DemandSimulation,
     SeatBuying,
     PriceSetting,
-    DemandSimulation
+};
+
+enum ActionType
+{
+    Buy0=1,
+    Buy5=2,
+    Buy10=3,
+    Buy15=4,
+    Buy20=5,
+    SetPrice50=6,
+    SetPrice55=7,
+    SetPrice60=8,
+    SetPrice70=9,
+    SetPrice80=10
 };
 
 class AirlineSeatsGame;
@@ -69,9 +83,11 @@ class AirlineSeatsState : public State {
 
  private:
   friend class AirlineSeatsObserver;
-
-  int winner_;                   // winning player, or kInvalidPlayer if the
-                                 // game isn't over yet.
+  std::vector<int> seats_;
+  std::vector<float> pnl_;
+  int round_;
+  GamePhase phase_;
+  int winner_;
 };
 
 class AirlineSeatsGame : public Game {
@@ -81,9 +97,6 @@ class AirlineSeatsGame : public Game {
   std::unique_ptr<State> NewInitialState() const override;
   int MaxChanceOutcomes() const override;
   int NumPlayers() const override;
-  double MinUtility() const override;
-  double MaxUtility() const override;
-  double UtilitySum() const override;
   std::vector<int> InformationStateTensorShape() const override;
   std::vector<int> ObservationTensorShape() const override;
   int MaxGameLength() const override;
@@ -91,6 +104,8 @@ class AirlineSeatsGame : public Game {
   std::shared_ptr<Observer> MakeObserver(
       absl::optional<IIGObservationType> iig_obs_type,
       const GameParameters& params) const override;
+  double MinUtility() const override;
+  double MaxUtility() const override;
 
   // Used to implement the old observation API.
   std::shared_ptr<AirlineSeatsObserver> default_observer_;

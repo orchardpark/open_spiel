@@ -32,6 +32,10 @@ namespace open_spiel {
 
 // Default parameters.
             constexpr int kDefaultPlayers = 2;
+            constexpr int kDefaultRandom = 20;
+            constexpr int kDefaultPower = 50;
+            constexpr int kC0 = 36;
+            constexpr int kMaxRounds = 10;
 
 // Facts about the game
             const GameType kGameType{/*short_name=*/"airline_seats",
@@ -168,140 +172,14 @@ namespace open_spiel {
 
         AirlineSeatsState::AirlineSeatsState(std::shared_ptr<const Game> game)
                 : State(game),
-                  first_bettor_(kInvalidPlayer),
-                  card_dealt_(game->NumPlayers() + 1, kInvalidPlayer),
                   winner_(kInvalidPlayer),
-                  pot_(kAnte * game->NumPlayers()),
-                // How much each player has contributed to the pot, indexed by pid.
-                  ante_(game->NumPlayers(), kAnte) {}
+                  round_(1),
+                  pnl_(num_players_),
+                  seats_(num_players_),
+                  phase_(GamePhase::DemandSimulation)
+                  {}
 
-        int AirlineSeatsState::CurrentPlayer() const {
-            if (IsTerminal()) {
-                return kTerminalPlayerId;
-            } else {
-                return (history_.size() < num_players_) ? kChancePlayerId
-                                                        : history_.size() % num_players_;
-            }
-        }
-
-        void AirlineSeatsState::DoApplyAction(Action move) {
-            // Additional bookkeeping
-            if (history_.size() < num_players_) {
-                // Give card `move` to player `history_.size()` (CurrentPlayer will return
-                // kChancePlayerId, so we use that instead).
-                card_dealt_[move] = history_.size();
-            } else if (move == ActionType::kBet) {
-                if (first_bettor_ == kInvalidPlayer) first_bettor_ = CurrentPlayer();
-                pot_ += 1;
-                ante_[CurrentPlayer()] += kAnte;
-            }
-
-            // We undo that before exiting the method.
-            // This is used in `DidBet`.
-            history_.push_back({CurrentPlayer(), move});
-
-            // Check for the game being over.
-            const int num_actions = history_.size() - num_players_;
-            if (first_bettor_ == kInvalidPlayer && num_actions == num_players_) {
-                // Nobody bet; the winner is the person with the highest card dealt,
-                // which is either the highest or the next-highest card.
-                // Losers lose 1, winner wins 1 * (num_players - 1)
-                winner_ = card_dealt_[num_players_];
-                if (winner_ == kInvalidPlayer) winner_ = card_dealt_[num_players_ - 1];
-            } else if (first_bettor_ != kInvalidPlayer &&
-                       num_actions == num_players_ + first_bettor_) {
-                // There was betting; so the winner is the person with the highest card
-                // who stayed in the hand.
-                // Check players in turn starting with the highest card.
-                for (int card = num_players_; card >= 0; --card) {
-                    const Player player = card_dealt_[card];
-                    if (player != kInvalidPlayer && DidBet(player)) {
-                        winner_ = player;
-                        break;
-                    }
-                }
-                SPIEL_CHECK_NE(winner_, kInvalidPlayer);
-            }
-            history_.pop_back();
-        }
-
-        std::vector<Action> AirlineSeatsState::LegalActions() const {
-            if (IsTerminal()) return {};
-            if (IsChanceNode()) {
-                std::vector<Action> actions;
-                for (int card = 0; card < card_dealt_.size(); ++card) {
-                    if (card_dealt_[card] == kInvalidPlayer) actions.push_back(card);
-                }
-                return actions;
-            } else {
-                return {ActionType::kPass, ActionType::kBet};
-            }
-        }
-
-        std::string AirlineSeatsState::ActionToString(Player player, Action move) const {
-            if (player == kChancePlayerId)
-                return absl::StrCat("Deal:", move);
-            else if (move == ActionType::kPass)
-                return "Pass";
-            else
-                return "Bet";
-        }
-
-        std::string AirlineSeatsState::ToString() const {
-            // The deal: space separated card per player
-            std::string str;
-            for (int i = 0; i < history_.size() && i < num_players_; ++i) {
-                if (!str.empty()) str.push_back(' ');
-                absl::StrAppend(&str, history_[i].action);
-            }
-
-            // The betting history: p for Pass, b for Bet
-            if (history_.size() > num_players_) str.push_back(' ');
-            for (int i = num_players_; i < history_.size(); ++i) {
-                str.push_back(history_[i].action ? 'b' : 'p');
-            }
-
-            return str;
-        }
-
-        bool AirlineSeatsState::IsTerminal() const { return winner_ != kInvalidPlayer; }
-
-        std::vector<double> AirlineSeatsState::Returns() const {
-            if (!IsTerminal()) {
-                return std::vector<double>(num_players_, 0.0);
-            }
-
-            std::vector<double> returns(num_players_);
-            for (auto player = Player{0}; player < num_players_; ++player) {
-                const int bet = DidBet(player) ? 2 : 1;
-                returns[player] = (player == winner_) ? (pot_ - bet) : -bet;
-            }
-            return returns;
-        }
-
-        std::string AirlineSeatsState::InformationStateString(Player player) const {
-            const AirlineSeatsGame &game = open_spiel::down_cast<const AirlineSeatsGame &>(*game_);
-            return game.info_state_observer_->StringFrom(*this, player);
-        }
-
-        std::string AirlineSeatsState::ObservationString(Player player) const {
-            const AirlineSeatsGame &game = open_spiel::down_cast<const AirlineSeatsGame &>(*game_);
-            return game.default_observer_->StringFrom(*this, player);
-        }
-
-        void AirlineSeatsState::InformationStateTensor(Player player,
-                                                       absl::Span<float> values) const {
-            ContiguousAllocator allocator(values);
-            const AirlineSeatsGame &game = open_spiel::down_cast<const AirlineSeatsGame &>(*game_);
-            game.info_state_observer_->WriteTensor(*this, player, &allocator);
-        }
-
-        void AirlineSeatsState::ObservationTensor(Player player,
-                                                  absl::Span<float> values) const {
-            ContiguousAllocator allocator(values);
-            const AirlineSeatsGame &game = open_spiel::down_cast<const AirlineSeatsGame &>(*game_);
-            game.default_observer_->WriteTensor(*this, player, &allocator);
-        }
+        bool AirlineSeatsState::IsTerminal() const { return round_ > kMaxRounds || std::accumulate(seats_.begin(), seats_.end(), 0) == 0; }
 
         std::unique_ptr<State> AirlineSeatsState::Clone() const {
             return std::unique_ptr<State>(new AirlineSeatsState(*this));
@@ -313,28 +191,8 @@ namespace open_spiel {
             return {{0, 1.0}};
         }
 
-        std::unique_ptr<State> AirlineSeatsState::ResampleFromInfostate(
-                int player_id, std::function<double()> rng) const {
-            std::unique_ptr<State> state = game_->NewInitialState();
-            Action player_chance = history_.at(player_id).action;
-            for (int p = 0; p < game_->NumPlayers(); ++p) {
-                if (p == history_.size()) return state;
-                if (p == player_id) {
-                    state->ApplyAction(player_chance);
-                } else {
-                    Action other_chance = player_chance;
-                    while (other_chance == player_chance) {
-                        other_chance = SampleAction(state->ChanceOutcomes(), rng()).first;
-                    }
-                    state->ApplyAction(other_chance);
-                }
-            }
-            SPIEL_CHECK_GE(state->CurrentPlayer(), 0);
-            if (game_->NumPlayers() == history_.size()) return state;
-            for (int i = game_->NumPlayers(); i < history_.size(); ++i) {
-                state->ApplyAction(history_.at(i).action);
-            }
-            return state;
+        std::string AirlineSeatsState::ActionToString(Player player, Action move) const {
+            
         }
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
@@ -357,39 +215,6 @@ namespace open_spiel {
             return std::unique_ptr<State>(new AirlineSeatsState(shared_from_this()));
         }
 
-        std::vector<int> AirlineSeatsGame::InformationStateTensorShape() const {
-            // One-hot for whose turn it is.
-            // One-hot encoding for the single private card. (n+1 cards = n+1 bits)
-            // Followed by 2 (n - 1 + n) bits for betting sequence (longest sequence:
-            // everyone except one player can pass and then everyone can bet/pass).
-            // n + n + 1 + 2 (n-1 + n) = 6n - 1.
-            return {6 * num_players_ - 1};
-        }
-
-        std::vector<int> AirlineSeatsGame::ObservationTensorShape() const {
-            // One-hot for whose turn it is.
-            // One-hot encoding for the single private card. (n+1 cards = n+1 bits)
-            // Followed by the contribution of each player to the pot (n).
-            // n + n + 1 + n = 3n + 1.
-            return {3 * num_players_ + 1};
-        }
-
-        double AirlineSeatsGame::MaxUtility() const {
-            // In poker, the utility is defined as the money a player has at the end
-            // of the game minus then money the player had before starting the game.
-            // Everyone puts a chip in at the start, and then they each have one more
-            // chip. Most that a player can gain is (#opponents)*2.
-            return (num_players_ - 1) * 2;
-        }
-
-        double AirlineSeatsGame::MinUtility() const {
-            // In poker, the utility is defined as the money a player has at the end
-            // of the game minus then money the player had before starting the game.
-            // In Kuhn, the most any one player can lose is the single chip they paid
-            // to play and the single chip they paid to raise/call.
-            return -2;
-        }
-
         std::shared_ptr<Observer> AirlineSeatsGame::MakeObserver(
                 absl::optional<IIGObservationType> iig_obs_type,
                 const GameParameters &params) const {
@@ -404,6 +229,37 @@ namespace open_spiel {
 
         int AirlineSeatsGame::NumPlayers() const {
             return num_players_;
+        }
+
+        int AirlineSeatsGame::MaxGameLength() const {
+            return num_players_ * kMaxRounds + num_players_;
+        }
+
+        int AirlineSeatsGame::NumDistinctActions() const {
+            // hardcoded for now, 5 buy qty and 5 price setting
+            return 10;
+        }
+
+        int AirlineSeatsGame::MaxChanceNodesInHistory() const {
+            return kMaxRounds;
+        }
+
+        std::vector<int> AirlineSeatsGame::InformationStateTensorShape() const {
+            // player turn + seats at beginning + c_11 + c_12 + c1 + seats sold (or bought) at each round + prices set + round number
+            return {num_players_ + 1 + 1 + 1 + 1 + num_players_*kMaxRounds + num_players_*kMaxRounds + 1};
+        }
+
+        std::vector<int> AirlineSeatsGame::ObservationTensorShape() const {
+            // player turn + seats left + round number + seats sold (or bought)
+            return {num_players_ + 1 + 1 + num_players_};
+        }
+
+        double AirlineSeatsGame::MinUtility() const {
+            return -1000;
+        }
+
+        double AirlineSeatsGame::MaxUtility() const {
+            return 1000;
         }
 
     }  // namespace kuhn_poker
