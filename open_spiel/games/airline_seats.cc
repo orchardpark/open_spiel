@@ -33,9 +33,12 @@ namespace open_spiel {
 // Default parameters.
             constexpr int kDefaultPlayers = 2;
             constexpr int kDefaultRandom = 20;
-            constexpr int kDefaultPower = 50;
-            constexpr int kC0 = 36;
+            constexpr int kDefaultPower = -50;
+            constexpr double kC0 = 36.0;
             constexpr int kMaxRounds = 10;
+            constexpr float kC11 = -0.24;
+            constexpr float kC12 = -0.293;
+            constexpr int kInitialRound = 0;
 
 // Facts about the game
             const GameType kGameType{/*short_name=*/"airline_seats",
@@ -64,122 +67,20 @@ namespace open_spiel {
             REGISTER_SPIEL_GAME(kGameType, Factory);
         }  // namespace
 
-        class AirlineSeatsObserver : public Observer {
-        public:
-            AirlineSeatsObserver(IIGObservationType iig_obs_type)
-                    : Observer(/*has_string=*/true, /*has_tensor=*/true),
-                      iig_obs_type_(iig_obs_type) {}
-
-            void WriteTensor(const State &observed_state, int player,
-                             Allocator *allocator) const override {
-                const AirlineSeatsState &state =
-                        open_spiel::down_cast<const AirlineSeatsState &>(observed_state);
-                SPIEL_CHECK_GE(player, 0);
-                SPIEL_CHECK_LT(player, state.num_players_);
-                const int num_players = state.num_players_;
-                const int num_cards = num_players + 1;
-
-                if (iig_obs_type_.private_info == PrivateInfoType::kSinglePlayer) {
-                    {  // Observing player.
-                        auto out = allocator->Get("player", {num_players});
-                        out.at(player) = 1;
-                    }
-                    {  // The player's card, if one has been dealt.
-                        auto out = allocator->Get("private_card", {num_cards});
-                        if (state.history_.size() > player)
-                            out.at(state.history_[player].action) = 1;
-                    }
-                }
-
-                // Betting sequence.
-                if (iig_obs_type_.public_info) {
-                    if (iig_obs_type_.perfect_recall) {
-                        auto out = allocator->Get("betting", {2 * num_players - 1, 2});
-                        for (int i = num_players; i < state.history_.size(); ++i) {
-                            out.at(i - num_players, state.history_[i].action) = 1;
-                        }
-                    } else {
-                        auto out = allocator->Get("pot_contribution", {num_players});
-                        for (auto p = Player{0}; p < state.num_players_; p++) {
-                            out.at(p) = state.ante_[p];
-                        }
-                    }
-                }
-            }
-
-            std::string StringFrom(const State &observed_state,
-                                   int player) const override {
-                const AirlineSeatsState &state =
-                        open_spiel::down_cast<const AirlineSeatsState &>(observed_state);
-                SPIEL_CHECK_GE(player, 0);
-                SPIEL_CHECK_LT(player, state.num_players_);
-                std::string result;
-
-                // Private card
-                if (iig_obs_type_.private_info == PrivateInfoType::kSinglePlayer) {
-                    if (iig_obs_type_.perfect_recall || iig_obs_type_.public_info) {
-                        if (state.history_.size() > player) {
-                            absl::StrAppend(&result, state.history_[player].action);
-                        }
-                    } else {
-                        if (state.history_.size() == 1 + player) {
-                            absl::StrAppend(&result, "Received card ",
-                                            state.history_[player].action);
-                        }
-                    }
-                }
-
-                // Betting.
-                // TODO(author11) Make this more self-consistent.
-                if (iig_obs_type_.public_info) {
-                    if (iig_obs_type_.perfect_recall) {
-                        // Perfect recall public info.
-                        for (int i = state.num_players_; i < state.history_.size(); ++i)
-                            result.push_back(state.history_[i].action ? 'b' : 'p');
-                    } else {
-                        // Imperfect recall public info - two different formats.
-                        if (iig_obs_type_.private_info == PrivateInfoType::kNone) {
-                            if (state.history_.empty()) {
-                                absl::StrAppend(&result, "start game");
-                            } else if (state.history_.size() > state.num_players_) {
-                                absl::StrAppend(&result,
-                                                state.history_.back().action ? "Bet" : "Pass");
-                            }
-                        } else {
-                            if (state.history_.size() > player) {
-                                for (auto p = Player{0}; p < state.num_players_; p++) {
-                                    absl::StrAppend(&result, state.ante_[p]);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Fact that we're dealing a card.
-                if (iig_obs_type_.public_info &&
-                    iig_obs_type_.private_info == PrivateInfoType::kNone &&
-                    !state.history_.empty() &&
-                    state.history_.size() <= state.num_players_) {
-                    int currently_dealing_to_player = state.history_.size() - 1;
-                    absl::StrAppend(&result, "Deal to player ", currently_dealing_to_player);
-                }
-                return result;
-            }
-
-        private:
-            IIGObservationType iig_obs_type_;
-        };
-
         AirlineSeatsState::AirlineSeatsState(std::shared_ptr<const Game> game)
                 : State(game),
+                  airlineSeatsGame_(std::static_pointer_cast<const AirlineSeatsGame>(game)),
                   winner_(kInvalidPlayer),
-                  round_(1),
-                  pnl_(num_players_),
-                  seats_(num_players_),
-                  phase_(GamePhase::DemandSimulation)
-                  {}
+                  round_(kInitialRound),
+                  boughtSeats_(num_players_),
+                  sold_(num_players_),
+                  prices_(num_players_),
+                  currentPlayer_(kChancePlayerId),
+                  phase_(GamePhase::InitialConditions) {}
 
-        bool AirlineSeatsState::IsTerminal() const { return round_ > kMaxRounds || std::accumulate(seats_.begin(), seats_.end(), 0) == 0; }
+        bool AirlineSeatsState::IsTerminal() const {
+            return round_ > kMaxRounds;
+        }
 
         std::unique_ptr<State> AirlineSeatsState::Clone() const {
             return std::unique_ptr<State>(new AirlineSeatsState(*this));
@@ -192,34 +93,160 @@ namespace open_spiel {
         }
 
         std::string AirlineSeatsState::ActionToString(Player player, Action move) const {
-            
+            if (phase_ == GamePhase::InitialConditions) {
+                return "InitialConditions";
+            } else if (phase_ == GamePhase::DemandSimulation) {
+                return "DemandSimulation";
+            } else if (move <= 5) {
+                return absl::StrCat("Buy:", (move - 1) * 5);
+            } else {
+                return absl::StrCat("SetPrice:", 50 + (move - 6) * 5);
+            }
+        }
+
+        std::vector<Action> AirlineSeatsState::LegalActions() const {
+            // implicit stochastic
+            if (phase_ == GamePhase::InitialConditions) return {0};
+                // seat buying
+            else if (phase_ == GamePhase::SeatBuying) {
+                return {1, 2, 3, 4, 5};
+            }
+                // pricing
+            else {
+                return {6, 7, 8, 9, 10};
+            }
+        }
+
+        void AirlineSeatsState::DoApplyAction(Action move) {
+            if (!ActionInActions(move)) {
+                SpielFatalError(absl::StrCat("Action ", move,
+                                             " is not valid in the current state."));
+            }
+            switch (phase_) {
+                case GamePhase::InitialConditions:
+                    DoApplyActionInitialConditions();
+                    break;
+                case GamePhase::SeatBuying:
+                    DoApplyActionSeatBuying(move);
+                    break;
+                case GamePhase::PriceSetting:
+                    DoApplyActionPriceSetting(move);
+                    break;
+                case GamePhase::DemandSimulation:
+                    DoApplyActionDemandSimulation();
+                    break;
+            }
+        }
+
+        bool AirlineSeatsState::ActionInActions(Action move) const {
+            auto actions = LegalActions();
+            return std::find(actions.begin(), actions.end(), move) != actions.end();
+        }
+
+        void AirlineSeatsState::DoApplyActionInitialConditions() {
+            // Stochastic sampling
+            c1_ = RAND() * (kC12 - kC11) + kC11;
+
+            // Set first player
+            currentPlayer_ = 1;
+            // Update phase
+            phase_ = GamePhase::SeatBuying;
+        }
+
+        Player AirlineSeatsState::CurrentPlayer() const {
+            return currentPlayer_;
+        }
+
+        double AirlineSeatsState::RAND() {
+            return (double) airlineSeatsGame_->RNG()() / (double)airlineSeatsGame_->RNG().max();
+        }
+
+        void AirlineSeatsState::DoApplyActionSeatBuying(Action move) {
+            // update the state by how much the player bought
+            boughtSeats_[currentPlayer_ - 1] = (int) (move - 1) * 5;
+            currentPlayer_++;
+
+            // once everyone has bought their seats, start setting prices
+            if (currentPlayer_ > num_players_) {
+                currentPlayer_ = 1;
+                phase_ = GamePhase::PriceSetting;
+                round_ = 1;
+            }
+        }
+
+        void AirlineSeatsState::DoApplyActionPriceSetting(Action move) {
+            auto price = (int) (move - 6) * 5 + 50;
+            prices_[currentPlayer_ - 1].push_back(price);
+            currentPlayer_++;
+
+            // move on to demand simulation
+            if (currentPlayer_ > num_players_) {
+                phase_ = GamePhase::DemandSimulation;
+                currentPlayer_ = kChancePlayerId;
+            }
+        }
+
+        void AirlineSeatsState::DoApplyActionDemandSimulation() {
+            // calculate seats sold
+            std::vector<double> powers;
+            std::vector<double> randoms;
+            std::vector<double> shares;
+            std::vector<double> randomizedShares;
+            // calculate powers
+            for (Player i = 1; i <= num_players_; i++) {
+                int price = prices_[currentPlayer_ - 1].back();
+                double power = pow(price, kDefaultPower);
+                powers.push_back(power);
+            }
+            // generate randoms
+            for (Player i = 1; i <= num_players_; i++) {
+                double random = ((RAND() - 0.5) * kDefaultRandom) / 100.0;
+                randoms.push_back(random);
+            }
+            double powerSum = std::accumulate(powers.begin(), powers.end(), 0.0);
+            double invertedSum = pow(powerSum, 1.0 / kDefaultRandom);
+            double totalDemand = invertedSum * kC0 * c1_;
+
+            for (Player i = 1; i <= num_players_ ; i++) {
+                double share = powers[i]/powerSum;
+                shares.push_back(share);
+            }
+
+            for(Player i=1; i<= num_players_; i++)
+            {
+                double randomizedShare = (1+randoms[i])*shares[i];
+                randomizedShares.push_back(randomizedShare);
+            }
+
+            for(Player i=1; i<=num_players_; i++)
+            {
+                int seatsSold = (int)round(totalDemand*randomizedShares[i]);
+                sold_[i].push_back(seatsSold);
+            }
+
+            // move on to the next round
+            phase_ = GamePhase::PriceSetting;
+            round_++;
+            currentPlayer_ = 1;
+
+        }
+
+        bool AirlineSeatsState::IsOutOfSeats(Player player) const {
+            auto playerSold = std::accumulate(sold_[player].begin(), sold_[player].end(), 0);
+            auto playerBought = boughtSeats_[player];
+            return playerSold >= playerBought;
         }
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
-                : Game(kGameType, params), num_players_(ParameterValue<int>("players")) {
+                : Game(kGameType, params),
+                  rng_(time(nullptr)),
+                  num_players_(ParameterValue<int>("players")) {
             SPIEL_CHECK_GE(num_players_, kGameType.min_num_players);
             SPIEL_CHECK_LE(num_players_, kGameType.max_num_players);
-            default_observer_ = std::make_shared<AirlineSeatsObserver>(kDefaultObsType);
-            info_state_observer_ = std::make_shared<AirlineSeatsObserver>(kInfoStateObsType);
-            private_observer_ = std::make_shared<AirlineSeatsObserver>(
-                    IIGObservationType{/*public_info*/false,
-                            /*perfect_recall*/false,
-                            /*private_info*/PrivateInfoType::kSinglePlayer});
-            public_observer_ = std::make_shared<AirlineSeatsObserver>(
-                    IIGObservationType{/*public_info*/true,
-                            /*perfect_recall*/false,
-                            /*private_info*/PrivateInfoType::kNone});
         }
 
         std::unique_ptr<State> AirlineSeatsGame::NewInitialState() const {
             return std::unique_ptr<State>(new AirlineSeatsState(shared_from_this()));
-        }
-
-        std::shared_ptr<Observer> AirlineSeatsGame::MakeObserver(
-                absl::optional<IIGObservationType> iig_obs_type,
-                const GameParameters &params) const {
-            if (!params.empty()) SpielFatalError("Observation params not supported");
-            return std::make_shared<AirlineSeatsObserver>(iig_obs_type.value_or(kDefaultObsType));
         }
 
         int AirlineSeatsGame::MaxChanceOutcomes() const {
@@ -236,8 +263,8 @@ namespace open_spiel {
         }
 
         int AirlineSeatsGame::NumDistinctActions() const {
-            // hardcoded for now, 5 buy qty and 5 price setting
-            return 10;
+            // hardcoded for now, 5 buy qty and 6 price setting (including setting no price)
+            return 11;
         }
 
         int AirlineSeatsGame::MaxChanceNodesInHistory() const {
@@ -245,13 +272,12 @@ namespace open_spiel {
         }
 
         std::vector<int> AirlineSeatsGame::InformationStateTensorShape() const {
-            // player turn + seats at beginning + c_11 + c_12 + c1 + seats sold (or bought) at each round + prices set + round number
-            return {num_players_ + 1 + 1 + 1 + 1 + num_players_*kMaxRounds + num_players_*kMaxRounds + 1};
+            // player turn + seats at beginning + round number + (seats sold) previous rounds + prices set
+            return {1 + 1 + 1 + num_players_ * kMaxRounds + num_players_ * kMaxRounds};
         }
 
         std::vector<int> AirlineSeatsGame::ObservationTensorShape() const {
-            // player turn + seats left + round number + seats sold (or bought)
-            return {num_players_ + 1 + 1 + num_players_};
+            return InformationStateTensorShape();
         }
 
         double AirlineSeatsGame::MinUtility() const {
@@ -259,7 +285,11 @@ namespace open_spiel {
         }
 
         double AirlineSeatsGame::MaxUtility() const {
-            return 1000;
+            return 5000;
+        }
+
+        std::mt19937 AirlineSeatsGame::RNG() const {
+            return rng_;
         }
 
     }  // namespace kuhn_poker

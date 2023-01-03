@@ -29,96 +29,125 @@
 //     "players"       int    number of players               (default = 2)
 
 namespace open_spiel {
-namespace airline_seats {
+    namespace airline_seats {
 
-enum class GamePhase
-{
-    DemandSimulation,
-    SeatBuying,
-    PriceSetting,
-};
+        enum class GamePhase {
+            InitialConditions,
+            SeatBuying,
+            PriceSetting,
+            DemandSimulation
+        };
 
-enum ActionType
-{
-    Buy0=1,
-    Buy5=2,
-    Buy10=3,
-    Buy15=4,
-    Buy20=5,
-    SetPrice50=6,
-    SetPrice55=7,
-    SetPrice60=8,
-    SetPrice70=9,
-    SetPrice80=10
-};
+        enum ActionType {
+            Buy0 = 1,
+            Buy5 = 2,
+            Buy10 = 3,
+            Buy15 = 4,
+            Buy20 = 5,
+            SetPrice50 = 6,
+            SetPrice55 = 7,
+            SetPrice60 = 8,
+            SetPrice65 = 9,
+            SetPrice70 = 10,
+        };
 
-class AirlineSeatsGame;
-class AirlineSeatsObserver;
+        class AirlineSeatsGame;
 
-class AirlineSeatsState : public State {
- public:
-  explicit AirlineSeatsState(std::shared_ptr<const Game> game);
-  AirlineSeatsState(const AirlineSeatsState&) = default;
+        class AirlineSeatsState : public State {
+        public:
+            explicit AirlineSeatsState(std::shared_ptr<const Game> game);
 
-  [[nodiscard]] Player CurrentPlayer() const override;
+            AirlineSeatsState(const AirlineSeatsState &) = default;
 
-  [[nodiscard]] std::string ActionToString(Player player, Action move) const override;
-  [[nodiscard]] std::string ToString() const override;
-  [[nodiscard]] bool IsTerminal() const override;
-  [[nodiscard]] std::vector<double> Returns() const override;
-  [[nodiscard]] std::string InformationStateString(Player player) const override;
-  [[nodiscard]] std::string ObservationString(Player player) const override;
-  void InformationStateTensor(Player player,
-                              absl::Span<float> values) const override;
-  void ObservationTensor(Player player,
-                         absl::Span<float> values) const override;
-  [[nodiscard]] std::unique_ptr<State> Clone() const override;
-  [[nodiscard]] std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
-  [[nodiscard]] std::vector<Action> LegalActions() const override;
-  std::unique_ptr<State> ResampleFromInfostate(
-      int player_id, std::function<double()> rng) const override;
+            [[nodiscard]] Player CurrentPlayer() const override;
 
- protected:
-  void DoApplyAction(Action move) override;
+            [[nodiscard]] std::string ActionToString(Player player, Action move) const override;
 
- private:
-  friend class AirlineSeatsObserver;
-  std::vector<int> seats_;
-  std::vector<float> pnl_;
-  int round_;
-  GamePhase phase_;
-  int winner_;
-};
+            [[nodiscard]] std::string ToString() const override;
 
-class AirlineSeatsGame : public Game {
- public:
-  explicit AirlineSeatsGame(const GameParameters& params);
-  int NumDistinctActions() const override;
-  std::unique_ptr<State> NewInitialState() const override;
-  int MaxChanceOutcomes() const override;
-  int NumPlayers() const override;
-  std::vector<int> InformationStateTensorShape() const override;
-  std::vector<int> ObservationTensorShape() const override;
-  int MaxGameLength() const override;
-  int MaxChanceNodesInHistory() const override;
-  std::shared_ptr<Observer> MakeObserver(
-      absl::optional<IIGObservationType> iig_obs_type,
-      const GameParameters& params) const override;
-  double MinUtility() const override;
-  double MaxUtility() const override;
+            [[nodiscard]] bool IsTerminal() const override;
 
-  // Used to implement the old observation API.
-  std::shared_ptr<AirlineSeatsObserver> default_observer_;
-  std::shared_ptr<AirlineSeatsObserver> info_state_observer_;
-  std::shared_ptr<AirlineSeatsObserver> public_observer_;
-  std::shared_ptr<AirlineSeatsObserver> private_observer_;
+            [[nodiscard]] std::vector<double> Returns() const override;
 
- private:
-  // Number of players.
-  int num_players_;
-};
+            [[nodiscard]] std::string InformationStateString(Player player) const override;
 
-}  // namespace arline_seats
+            [[nodiscard]] std::string ObservationString(Player player) const override;
+
+            void InformationStateTensor(Player player,
+                                        absl::Span<float> values) const override;
+
+            void ObservationTensor(Player player,
+                                   absl::Span<float> values) const override;
+
+            [[nodiscard]] std::unique_ptr<State> Clone() const override;
+
+            [[nodiscard]] std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
+
+            [[nodiscard]] std::vector<Action> LegalActions() const override;
+
+        protected:
+            void DoApplyAction(Action move) override;
+
+        private:
+            // rng
+            double RAND();
+            std::shared_ptr<const AirlineSeatsGame> airlineSeatsGame_;
+
+            // helper function
+            [[nodiscard]] bool IsOutOfSeats(Player player) const;
+
+            // action functions
+            void DoApplyActionInitialConditions();
+            void DoApplyActionSeatBuying(Action move);
+            void DoApplyActionPriceSetting(Action move);
+            void DoApplyActionDemandSimulation();
+
+            // variables that maintain the state (history) of the game
+            std::vector<int> boughtSeats_; // how many seats were bought initially per player
+            std::vector<std::vector<int>> sold_; // sold seats per player at each round
+            std::vector<std::vector<int>> prices_; // prices set per player at each round
+            double c1_;
+            int round_;
+            GamePhase phase_;
+            Player currentPlayer_;
+            Player winner_;
+
+            [[nodiscard]] bool ActionInActions(Action move) const;
+        };
+
+        class AirlineSeatsGame : public Game {
+        public:
+            explicit AirlineSeatsGame(const GameParameters &params);
+
+            int NumDistinctActions() const override;
+
+            std::unique_ptr<State> NewInitialState() const override;
+
+            int MaxChanceOutcomes() const override;
+
+            int NumPlayers() const override;
+
+            std::vector<int> InformationStateTensorShape() const override;
+
+            std::vector<int> ObservationTensorShape() const override;
+
+            int MaxGameLength() const override;
+
+            int MaxChanceNodesInHistory() const override;
+
+            double MinUtility() const override;
+
+            double MaxUtility() const override;
+
+            std::mt19937 RNG() const;
+
+        private:
+            // Number of players.
+            int num_players_;
+            mutable std::mt19937 rng_;
+        };
+
+    }  // namespace arline_seats
 }  // namespace open_spiel
 
 #endif  // OPEN_SPIEL_GAMES_AIRLINE_SEATS_H_
