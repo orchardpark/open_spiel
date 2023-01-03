@@ -24,25 +24,19 @@
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
 
-// A simple game that includes chance and imperfect information
-// http://en.wikipedia.org/wiki/Kuhn_poker
-//
-// For more information on this game (e.g. equilibrium sets, etc.) see
-// http://poker.cs.ualberta.ca/publications/AAAI05.pdf
-//
-// The multiplayer (n>2) version is the one described in
-// http://mlanctot.info/files/papers/aamas14sfrd-cfr-kuhn.pdf
-//
+// Airline seats game, where players compete to sell airline seats.
 // Parameters:
 //     "players"       int    number of players               (default = 2)
 
 namespace open_spiel {
 namespace airline_seats {
 
-inline constexpr const int kNumInfoStatesP0 = 6;
-inline constexpr const int kNumInfoStatesP1 = 6;
-
-enum ActionType { kPass = 0, kBet = 1 };
+enum class GamePhase
+{
+    SeatBuying,
+    PriceSetting,
+    DemandSimulation
+};
 
 class AirlineSeatsGame;
 class AirlineSeatsObserver;
@@ -52,27 +46,23 @@ class AirlineSeatsState : public State {
   explicit AirlineSeatsState(std::shared_ptr<const Game> game);
   AirlineSeatsState(const AirlineSeatsState&) = default;
 
-  Player CurrentPlayer() const override;
+  [[nodiscard]] Player CurrentPlayer() const override;
 
-  std::string ActionToString(Player player, Action move) const override;
-  std::string ToString() const override;
-  bool IsTerminal() const override;
-  std::vector<double> Returns() const override;
-  std::string InformationStateString(Player player) const override;
-  std::string ObservationString(Player player) const override;
+  [[nodiscard]] std::string ActionToString(Player player, Action move) const override;
+  [[nodiscard]] std::string ToString() const override;
+  [[nodiscard]] bool IsTerminal() const override;
+  [[nodiscard]] std::vector<double> Returns() const override;
+  [[nodiscard]] std::string InformationStateString(Player player) const override;
+  [[nodiscard]] std::string ObservationString(Player player) const override;
   void InformationStateTensor(Player player,
                               absl::Span<float> values) const override;
   void ObservationTensor(Player player,
                          absl::Span<float> values) const override;
-  std::unique_ptr<State> Clone() const override;
-  void UndoAction(Player player, Action move) override;
-  std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
-  std::vector<Action> LegalActions() const override;
-  std::vector<int> hand() const { return {card_dealt_[CurrentPlayer()]}; }
+  [[nodiscard]] std::unique_ptr<State> Clone() const override;
+  [[nodiscard]] std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
+  [[nodiscard]] std::vector<Action> LegalActions() const override;
   std::unique_ptr<State> ResampleFromInfostate(
       int player_id, std::function<double()> rng) const override;
-
-  const std::vector<int>& CardDealt() const { return card_dealt_; }
 
  protected:
   void DoApplyAction(Action move) override;
@@ -80,37 +70,24 @@ class AirlineSeatsState : public State {
  private:
   friend class AirlineSeatsObserver;
 
-  // Whether the specified player made a bet
-  bool DidBet(Player player) const;
-
-  // The move history and number of players are sufficient information to
-  // specify the state of the game. We keep track of more information to make
-  // extracting legal actions and utilities easier.
-  // The cost of the additional book-keeping is more complex ApplyAction() and
-  // UndoAction() functions.
-  int first_bettor_;             // the player (if any) who was first to bet
-  std::vector<int> card_dealt_;  // the player (if any) who has each card
   int winner_;                   // winning player, or kInvalidPlayer if the
                                  // game isn't over yet.
-  int pot_;                      // the size of the pot
-  // How much each player has contributed to the pot, indexed by pid.
-  std::vector<int> ante_;
 };
 
 class AirlineSeatsGame : public Game {
  public:
   explicit AirlineSeatsGame(const GameParameters& params);
-  int NumDistinctActions() const override { return 2; }
+  int NumDistinctActions() const override;
   std::unique_ptr<State> NewInitialState() const override;
-  int MaxChanceOutcomes() const override { return num_players_ + 1; }
-  int NumPlayers() const override { return num_players_; }
+  int MaxChanceOutcomes() const override;
+  int NumPlayers() const override;
   double MinUtility() const override;
   double MaxUtility() const override;
-  double UtilitySum() const override { return 0; }
+  double UtilitySum() const override;
   std::vector<int> InformationStateTensorShape() const override;
   std::vector<int> ObservationTensorShape() const override;
-  int MaxGameLength() const override { return num_players_ * 2 - 1; }
-  int MaxChanceNodesInHistory() const override { return num_players_; }
+  int MaxGameLength() const override;
+  int MaxChanceNodesInHistory() const override;
   std::shared_ptr<Observer> MakeObserver(
       absl::optional<IIGObservationType> iig_obs_type,
       const GameParameters& params) const override;
@@ -126,17 +103,7 @@ class AirlineSeatsGame : public Game {
   int num_players_;
 };
 
-// Returns policy that always passes.
-TabularPolicy GetAlwaysPassPolicy(const Game& game);
-
-// Returns policy that always bets.
-TabularPolicy GetAlwaysBetPolicy(const Game& game);
-
-// The optimal Kuhn policy as stated at https://en.wikipedia.org/wiki/Kuhn_poker
-// The Nash equilibrium is parametrized by alpha \in [0, 1/3].
-TabularPolicy GetOptimalPolicy(double alpha);
-
-}  // namespace kuhn_poker
+}  // namespace arline_seats
 }  // namespace open_spiel
 
 #endif  // OPEN_SPIEL_GAMES_AIRLINE_SEATS_H_
