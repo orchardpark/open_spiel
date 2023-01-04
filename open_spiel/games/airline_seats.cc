@@ -264,6 +264,31 @@ namespace open_spiel {
             return returns;
         }
 
+        std::vector<double> AirlineSeatsState::Rewards() const {
+            std::vector<double> rewards;
+            for(Player i=1; i<=num_players_; i++)
+            {
+                double pnl = boughtSeats_[i]*kInitialPurchasePrice;
+                int seatsLeft = boughtSeats_[i];
+                for(int round=1; round<round_; round++)
+                {
+                    int sold = sold_[i][round];
+                    double price = prices_[i][round];
+                    pnl += sold*price;
+                    if(seatsLeft > 0){
+                        seatsLeft -= sold;
+                        if(seatsLeft < 0) pnl -= -seatsLeft*kLatePurchasePrice;
+                    }
+                    else{
+                        pnl -= sold * kLatePurchasePrice;
+                    }
+                }
+                rewards.push_back(pnl);
+            }
+
+            return rewards;
+        }
+
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
                   rng_(time(nullptr)),
