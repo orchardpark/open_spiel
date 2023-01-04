@@ -190,6 +190,11 @@ namespace open_spiel {
             }
         }
 
+        double my_pow(double a,double b) {
+            if (b < 0) return 1.0 / pow(a,std::abs(b));
+            else return pow(a,b);
+        }
+
         void AirlineSeatsState::DoApplyActionDemandSimulation() {
             // calculate seats sold
             std::vector<double> powers;
@@ -208,8 +213,8 @@ namespace open_spiel {
                 randoms.push_back(random);
             }
             double powerSum = std::accumulate(powers.begin(), powers.end(), 0.0);
-            double invertedSum = pow(powerSum, 1.0 / kDefaultRandom);
-            double totalDemand = invertedSum * kC0 * c1_;
+            double invertedSum = my_pow(powerSum, 1.0 / kDefaultPower);
+            double totalDemand = kC0 + invertedSum * c1_;
 
             for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double share = powers[i] / powerSum;
