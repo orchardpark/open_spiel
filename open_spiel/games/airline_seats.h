@@ -39,16 +39,16 @@ namespace open_spiel {
         };
 
         enum ActionType {
-            Buy0 = 1,
-            Buy5 = 2,
-            Buy10 = 3,
-            Buy15 = 4,
-            Buy20 = 5,
-            SetPrice50 = 6,
-            SetPrice55 = 7,
-            SetPrice60 = 8,
-            SetPrice65 = 9,
-            SetPrice70 = 10,
+            Buy0 = 0,
+            Buy5 = 1,
+            Buy10 = 2,
+            Buy15 = 3,
+            Buy20 = 4,
+            SetPrice50 = 5,
+            SetPrice55 = 6,
+            SetPrice60 = 7,
+            SetPrice65 = 8,
+            SetPrice70 = 9,
         };
 
         class AirlineSeatsGame;

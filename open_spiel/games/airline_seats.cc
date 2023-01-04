@@ -100,10 +100,10 @@ namespace open_spiel {
                 return "InitialConditions";
             } else if (phase_ == GamePhase::DemandSimulation) {
                 return "DemandSimulation";
-            } else if (move <= 5) {
-                return absl::StrCat("Buy:", (move - 1) * 5);
+            } else if (move < 5) {
+                return absl::StrCat("Buy:", (move) * 5);
             } else {
-                return absl::StrCat("SetPrice:", 50 + (move - 6) * 5);
+                return absl::StrCat("SetPrice:", 50 + (move - 5) * 5);
             }
         }
 
@@ -112,11 +112,11 @@ namespace open_spiel {
             if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
                 // seat buying
             else if (phase_ == GamePhase::SeatBuying) {
-                return {1, 2, 3, 4, 5};
+                return {0, 1, 2, 3, 4};
             }
                 // pricing
             else {
-                return {6, 7, 8, 9, 10};
+                return {5, 6, 7, 8, 9};
             }
         }
 
@@ -168,7 +168,7 @@ namespace open_spiel {
 
         void AirlineSeatsState::DoApplyActionSeatBuying(Action move) {
             // update the state by how much the player bought
-            boughtSeats_[currentPlayer_] = (int) (move - 1) * 5;
+            boughtSeats_[currentPlayer_] = (int) (move) * 5;
             currentPlayer_++;
 
             // once everyone has bought their seats, start setting prices
@@ -179,7 +179,7 @@ namespace open_spiel {
         }
 
         void AirlineSeatsState::DoApplyActionPriceSetting(Action move) {
-            auto price = (int) (move - 6) * 5 + 50;
+            auto price = (int) (move - 5) * 5 + 50;
             prices_[currentPlayer_].push_back(price);
             currentPlayer_++;
 
