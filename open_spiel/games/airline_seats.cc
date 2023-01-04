@@ -355,6 +355,8 @@ namespace open_spiel {
         }
 
         std::string AirlineSeatsState::InformationStateString(Player player) const {
+            SPIEL_CHECK_GE(player, 0);
+            SPIEL_CHECK_LT(player, num_players_);
             std::string boughtSeats;
             absl::StrAppendFormat(&boughtSeats, "%d", boughtSeats_[player]);
 
