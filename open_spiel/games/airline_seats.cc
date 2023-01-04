@@ -39,6 +39,8 @@ namespace open_spiel {
             constexpr float kC11 = -0.24;
             constexpr float kC12 = -0.293;
             constexpr int kInitialRound = 0;
+            constexpr int kInitialPurchasePrice = 50;
+            constexpr int kLatePurchasePrice = 80;
 
 // Facts about the game
             const GameType kGameType{/*short_name=*/"airline_seats",
@@ -237,6 +239,31 @@ namespace open_spiel {
             return playerSold >= playerBought;
         }
 
+        std::vector<double> AirlineSeatsState::Returns() const {
+            std::vector<double> returns;
+            for(Player i=1; i<=num_players_; i++)
+            {
+                double pnl = boughtSeats_[i]*kInitialPurchasePrice;
+                int seatsLeft = boughtSeats_[i];
+                for(int round=1; round<=kMaxRounds; round++)
+                {
+                    int sold = sold_[i][round];
+                    double price = prices_[i][round];
+                    pnl += sold*price;
+                    if(seatsLeft > 0){
+                        seatsLeft -= sold;
+                        if(seatsLeft < 0) pnl -= -seatsLeft*kLatePurchasePrice;
+                    }
+                    else{
+                        pnl -= sold * kLatePurchasePrice;
+                    }
+                }
+                returns.push_back(pnl);
+            }
+
+            return returns;
+        }
+
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
                   rng_(time(nullptr)),
@@ -292,5 +319,5 @@ namespace open_spiel {
             return rng_;
         }
 
-    }  // namespace kuhn_poker
+    }  // namespace airline_seats
 }  // namespace open_spiel

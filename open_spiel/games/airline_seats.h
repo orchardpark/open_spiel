@@ -69,6 +69,8 @@ namespace open_spiel {
 
             [[nodiscard]] std::vector<double> Returns() const override;
 
+            [[nodiscard]] std::vector<double> Rewards() const override;
+
             [[nodiscard]] std::string InformationStateString(Player player) const override;
 
             [[nodiscard]] std::string ObservationString(Player player) const override;
