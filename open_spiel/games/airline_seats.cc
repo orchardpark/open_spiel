@@ -41,6 +41,7 @@ namespace open_spiel {
             constexpr int kInitialRound = 0;
             constexpr int kInitialPurchasePrice = 50;
             constexpr int kLatePurchasePrice = 80;
+            constexpr int kInitialPlayer = 0;
 
 // Facts about the game
             const GameType kGameType{/*short_name=*/"airline_seats",
@@ -80,7 +81,7 @@ namespace open_spiel {
                   phase_(GamePhase::InitialConditions) {}
 
         bool AirlineSeatsState::IsTerminal() const {
-            return round_ > kMaxRounds;
+            return round_ >= kMaxRounds;
         }
 
         std::unique_ptr<State> AirlineSeatsState::Clone() const {
@@ -149,7 +150,7 @@ namespace open_spiel {
             c1_ = RAND() * (kC12 - kC11) + kC11;
 
             // Set first player
-            currentPlayer_ = 1;
+            currentPlayer_ = kInitialPlayer;
             // Update phase
             phase_ = GamePhase::SeatBuying;
         }
@@ -164,20 +165,19 @@ namespace open_spiel {
 
         void AirlineSeatsState::DoApplyActionSeatBuying(Action move) {
             // update the state by how much the player bought
-            boughtSeats_[currentPlayer_ - 1] = (int) (move - 1) * 5;
+            boughtSeats_[currentPlayer_] = (int) (move - 1) * 5;
             currentPlayer_++;
 
             // once everyone has bought their seats, start setting prices
             if (currentPlayer_ > num_players_) {
-                currentPlayer_ = 1;
+                currentPlayer_ = kInitialPlayer;
                 phase_ = GamePhase::PriceSetting;
-                round_ = 1;
             }
         }
 
         void AirlineSeatsState::DoApplyActionPriceSetting(Action move) {
             auto price = (int) (move - 6) * 5 + 50;
-            prices_[currentPlayer_ - 1].push_back(price);
+            prices_[currentPlayer_].push_back(price);
             currentPlayer_++;
 
             // move on to demand simulation
@@ -194,13 +194,13 @@ namespace open_spiel {
             std::vector<double> shares;
             std::vector<double> randomizedShares;
             // calculate powers
-            for (Player i = 1; i <= num_players_; i++) {
-                int price = prices_[currentPlayer_ - 1].back();
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
+                int price = prices_[currentPlayer_].back();
                 double power = pow(price, kDefaultPower);
                 powers.push_back(power);
             }
             // generate randoms
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double random = ((RAND() - 0.5) * kDefaultRandom) / 100.0;
                 randoms.push_back(random);
             }
@@ -208,17 +208,17 @@ namespace open_spiel {
             double invertedSum = pow(powerSum, 1.0 / kDefaultRandom);
             double totalDemand = invertedSum * kC0 * c1_;
 
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double share = powers[i] / powerSum;
                 shares.push_back(share);
             }
 
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double randomizedShare = (1 + randoms[i]) * shares[i];
                 randomizedShares.push_back(randomizedShare);
             }
 
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 int seatsSold = (int) round(totalDemand * randomizedShares[i]);
                 sold_[i].push_back(seatsSold);
             }
@@ -226,7 +226,7 @@ namespace open_spiel {
             // move on to the next round
             phase_ = GamePhase::PriceSetting;
             round_++;
-            currentPlayer_ = 1;
+            currentPlayer_ = kInitialPlayer;
 
         }
 
@@ -238,10 +238,10 @@ namespace open_spiel {
 
         std::vector<double> AirlineSeatsState::Returns() const {
             std::vector<double> returns;
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double pnl = boughtSeats_[i] * kInitialPurchasePrice;
                 int seatsLeft = boughtSeats_[i];
-                for (int round = 1; round <= kMaxRounds; round++) {
+                for (int round = kInitialRound; round < kMaxRounds; round++) {
                     int sold = sold_[i][round];
                     double price = prices_[i][round];
                     pnl += sold * price;
@@ -260,10 +260,10 @@ namespace open_spiel {
 
         std::vector<double> AirlineSeatsState::Rewards() const {
             std::vector<double> rewards;
-            for (Player i = 1; i <= num_players_; i++) {
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double pnl = boughtSeats_[i] * kInitialPurchasePrice;
                 int seatsLeft = boughtSeats_[i];
-                for (int round = 1; round < round_; round++) {
+                for (int round = kInitialRound; round < round_; round++) {
                     int sold = sold_[i][round];
                     double price = prices_[i][round];
                     pnl += sold * price;
@@ -305,14 +305,14 @@ namespace open_spiel {
                     break;
             }
             std::string boughtSeats;
-            for (Player i = 1; i <= num_players_; i++) {
-                absl::StrAppendFormat(&boughtSeats, "%d,", boughtSeats_[i - 1]);
+            for (Player i = kInitialPlayer; i < num_players_; i++) {
+                absl::StrAppendFormat(&boughtSeats, "%d,", boughtSeats_[i]);
             }
 
             std::string sold;
             for (int j = 0; j < kMaxRounds; j++) {
                 absl::StrAppendFormat(&sold, "%d:", j);
-                for (Player i = 1; i <= num_players_; i++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
                 }
             }
@@ -320,7 +320,7 @@ namespace open_spiel {
             std::string prices;
             for (int j = 0; j < kMaxRounds; j++) {
                 absl::StrAppendFormat(&prices, "%d:", j);
-                for (Player i = 1; i <= num_players_; i++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
                 }
             }
@@ -341,12 +341,12 @@ namespace open_spiel {
 
         std::string AirlineSeatsState::InformationStateString(Player player) const {
             std::string boughtSeats;
-            absl::StrAppendFormat(&boughtSeats, "%d", boughtSeats_[player - 1]);
+            absl::StrAppendFormat(&boughtSeats, "%d", boughtSeats_[player]);
 
             std::string sold;
             for (int j = 0; j < kMaxRounds; j++) {
                 absl::StrAppendFormat(&sold, "%d:", j);
-                for (Player i = 1; i <= num_players_; i++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
                 }
             }
@@ -354,7 +354,7 @@ namespace open_spiel {
             std::string prices;
             for (int j = 0; j < kMaxRounds; j++) {
                 absl::StrAppendFormat(&prices, "%d:", j);
-                for (Player i = 1; i <= num_players_; i++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
                 }
             }
@@ -369,6 +369,12 @@ namespace open_spiel {
             );
 
             return output;
+        }
+
+        void AirlineSeatsState::InformationStateTensor(Player player, absl::Span<float> values) const {
+            SPIEL_CHECK_GE(player, 0);
+            SPIEL_CHECK_LT(player, num_players_);
+            State::InformationStateTensor(player, values);
         }
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
