@@ -289,6 +289,14 @@ namespace open_spiel {
             return rewards;
         }
 
+        void AirlineSeatsState::ObservationTensor(Player player, absl::Span<float> values) const {
+            return InformationStateTensor(player, values);
+        }
+
+        std::string AirlineSeatsState::ObservationString(Player player) const {
+            return InformationStateString(player);
+        }
+
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
                   rng_(time(nullptr)),
