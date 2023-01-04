@@ -86,7 +86,7 @@ namespace open_spiel {
             [[nodiscard]] std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
 
             [[nodiscard]] std::vector<Action> LegalActions() const override;
-            //[[nodiscard]] std::string Serialize() const override;
+            [[nodiscard]] std::string Serialize() const override;
 
         protected:
             void DoApplyAction(Action move) override;
@@ -115,7 +115,7 @@ namespace open_spiel {
             int round_;
             GamePhase phase_;
             Player currentPlayer_;
-
+            friend class AirlineSeatsGame;
             [[nodiscard]] bool ActionInActions(Action move) const;
         };
 
@@ -126,6 +126,7 @@ namespace open_spiel {
             int NumDistinctActions() const override;
 
             std::unique_ptr<State> NewInitialState() const override;
+            std::unique_ptr<AirlineSeatsState> NewInitialAirlineSeatsState() const;
 
             int MaxChanceOutcomes() const override;
 
@@ -146,6 +147,8 @@ namespace open_spiel {
             std::string GetRNGState() const override;
 
             void SetRNGState(const std::string &rng_state) const override;
+            std::unique_ptr<State> DeserializeState(
+                    const std::string& str) const override;
 
 
         private:

@@ -244,7 +244,7 @@ namespace open_spiel {
             for (Player i = kInitialPlayer; i < num_players_; i++) {
                 double pnl = boughtSeats_[i] * kInitialPurchasePrice;
                 int seatsLeft = boughtSeats_[i];
-                for (int round = kInitialRound; round < kMaxRounds; round++) {
+                for (int round = kInitialRound; round < round_; round++) {
                     int sold = sold_[i][round];
                     double price = prices_[i][round];
                     pnl += sold * price;
@@ -314,7 +314,6 @@ namespace open_spiel {
 
             std::string sold;
             for (int j = 0; j < round_; j++) {
-                absl::StrAppendFormat(&sold, "%d:", j);
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
                 }
@@ -322,7 +321,6 @@ namespace open_spiel {
 
             std::string prices;
             for (int j = 0; j < round_; j++) {
-                absl::StrAppendFormat(&prices, "%d:", j);
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
                 }
@@ -347,16 +345,14 @@ namespace open_spiel {
             absl::StrAppendFormat(&boughtSeats, "%d", boughtSeats_[player]);
 
             std::string sold;
-            for (int j = 0; j < kMaxRounds; j++) {
-                absl::StrAppendFormat(&sold, "%d:", j);
+            for (int j = 0; j < round_; j++) {
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
                 }
             }
 
             std::string prices;
-            for (int j = 0; j < kMaxRounds; j++) {
-                absl::StrAppendFormat(&prices, "%d:", j);
+            for (int j = 0; j < round_; j++) {
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
                 }
@@ -374,11 +370,23 @@ namespace open_spiel {
             return output;
         }
 
+        // TODO
         void AirlineSeatsState::InformationStateTensor(Player player, absl::Span<float> values) const {
             SPIEL_CHECK_GE(player, 0);
             SPIEL_CHECK_LT(player, num_players_);
             SPIEL_CHECK_EQ(values.size(), game_->InformationStateTensorSize());
             std::fill(values.begin(), values.end(), 0);
+        }
+
+        std::string AirlineSeatsState::Serialize() const {
+            std::string result;
+            auto rngState = game_->GetRNGState();
+            auto stateString = this->ToString();
+            result+=rngState;
+            result+="|";
+            result+=stateString;
+
+            return result;
         }
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
@@ -390,11 +398,10 @@ namespace open_spiel {
                   {
             SPIEL_CHECK_GE(num_players_, kGameType.min_num_players);
             SPIEL_CHECK_LE(num_players_, kGameType.max_num_players);
-            std::cout << "Number of players: " << num_players_ << std::endl;
         }
 
         std::unique_ptr<State> AirlineSeatsGame::NewInitialState() const {
-            return std::unique_ptr<State>(new AirlineSeatsState(shared_from_this()));
+            return NewInitialAirlineSeatsState();
         }
 
         int AirlineSeatsGame::MaxChanceOutcomes() const {
@@ -452,6 +459,62 @@ namespace open_spiel {
 
         unsigned long AirlineSeatsGame::RNGMax() const {
             return rng_.max();
+        }
+
+        std::unique_ptr<State> AirlineSeatsGame::DeserializeState(const std::string &str) const {
+            std::unique_ptr<AirlineSeatsState> state = NewInitialAirlineSeatsState();
+            std::vector<std::string> lines = absl::StrSplit(str, '|');
+            // set rng
+            SetRNGState(lines.at(0));
+            // set round
+            state->round_ = std::stoi(lines.at(1));
+            // set c1
+            state->c1_ = std::stod(lines.at(2));
+            // set player
+            state->currentPlayer_ = std::stoi(lines.at(3));
+            // set phase
+            std::string phase = lines.at(4);
+            if(phase == "IC")
+                state->phase_ = GamePhase::InitialConditions;
+            else if(phase == "SB")
+                state->phase_ = GamePhase::SeatBuying;
+            else if(phase == "PS")
+                state->phase_ = GamePhase::PriceSetting;
+            else
+                state->phase_ = GamePhase::DemandSimulation;
+            // seats
+            std::vector<std::string> seats = absl::StrSplit(lines.at(5), ",");
+            for(Player i = kInitialPlayer; i<num_players_; i++)
+            {
+                state->boughtSeats_[i] = std::stoi(seats[i]);
+            }
+            // sold
+            std::vector<std::string> sold = absl::StrSplit(lines.at(6), ",");
+            for(int j=kInitialRound; j<state->round_; j++)
+            {
+                for(Player i=kInitialPlayer; i<num_players_; i++)
+                {
+                    state->sold_[i].push_back(std::stoi(sold[i+j*num_players_]));
+                }
+            }
+
+            // prices
+            std::vector<std::string> prices = absl::StrSplit(lines.at(7), ",");
+            for(int j=kInitialRound; j<state->round_; j++)
+            {
+                for(Player i=kInitialPlayer; i<num_players_; i++)
+                {
+                    state->prices_[i].push_back(std::stoi(prices[i+j*num_players_]));
+                }
+            }
+            std::cout << "repr:" << state->ToString() << std::endl;
+
+            return state;
+
+        }
+
+        std::unique_ptr<AirlineSeatsState> AirlineSeatsGame::NewInitialAirlineSeatsState() const {
+            return std::make_unique<AirlineSeatsState>(shared_from_this());
         }
 
 

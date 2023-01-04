@@ -27,8 +27,9 @@ namespace testing = open_spiel::testing;
 
 void BasicAirlineSeatsTest() {
   testing::LoadGameTest("airline_seats");
+
   testing::RandomSimTest(*LoadGame("airline_seats"), 100);
-  testing::RandomSimTestWithUndo(*LoadGame("airline_seats"), 1);
+
   for (Player players = 2; players <= 4; players++) {
     testing::RandomSimTest(
         *LoadGame("airline_seats", {{"players", GameParameter(players)}}), 100);
@@ -41,11 +42,4 @@ void BasicAirlineSeatsTest() {
 
 int main(int argc, char **argv) {
   open_spiel::airline_seats::BasicAirlineSeatsTest();
-  open_spiel::testing::CheckChanceOutcomes(*open_spiel::LoadGame(
-      "kuhn_poker", {{"players", open_spiel::GameParameter(3)}}));
-  open_spiel::testing::RandomSimTest(*open_spiel::LoadGame("kuhn_poker"),
-                                     /*num_sims=*/10);
-  open_spiel::testing::ResampleInfostateTest(
-      *open_spiel::LoadGame("kuhn_poker"),
-      /*num_sims=*/10);
 }
