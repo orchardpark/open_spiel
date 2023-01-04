@@ -51,7 +51,7 @@ namespace open_spiel {
                                                     GameType::ChanceMode::kSampledStochastic,
                                                     GameType::Information::kImperfectInformation,
                                                     GameType::Utility::kGeneralSum,
-                                                    GameType::RewardModel::kRewards,
+                                                    GameType::RewardModel::kTerminal,
                     /*max_num_players=*/4,
                     /*min_num_players=*/2,
                     /*provides_information_state_string=*/true,
@@ -198,7 +198,7 @@ namespace open_spiel {
             std::vector<double> randomizedShares;
             // calculate powers
             for (Player i = kInitialPlayer; i < num_players_; i++) {
-                int price = prices_[currentPlayer_].back();
+                int price = prices_[i].back();
                 double power = pow(price, kDefaultPower);
                 powers.push_back(power);
             }
@@ -231,6 +231,11 @@ namespace open_spiel {
             round_++;
             currentPlayer_ = kInitialPlayer;
 
+            if(round_ >= kMaxRounds)
+            {
+                currentPlayer_ = kTerminalPlayerId;
+            }
+
         }
 
         bool AirlineSeatsState::IsOutOfSeats(Player player) const {
@@ -240,27 +245,30 @@ namespace open_spiel {
         }
 
         std::vector<double> AirlineSeatsState::Returns() const {
-            std::vector<double> returns;
-            for (Player i = kInitialPlayer; i < num_players_; i++) {
-                double pnl = boughtSeats_[i] * -kInitialPurchasePrice;
-                int seatsLeft = boughtSeats_[i];
-                for (int round = kInitialRound; round < round_; round++) {
-                    int sold = sold_[i][round];
-                    double price = prices_[i][round];
-                    pnl += sold * price;
-                    if (seatsLeft > 0) {
-                        seatsLeft -= sold;
-                        if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
-                    } else {
-                        pnl -= sold * kLatePurchasePrice;
+            std::vector<double> returns(num_players_, 0.0);
+            if(IsTerminal()) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
+                    double pnl = boughtSeats_[i] * -kInitialPurchasePrice;
+                    int seatsLeft = boughtSeats_[i];
+                    for (int round = kInitialRound; round < round_; round++) {
+                        int sold = sold_[i][round];
+                        double price = prices_[i][round];
+                        pnl += sold * price;
+                        if (seatsLeft > 0) {
+                            seatsLeft -= sold;
+                            if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
+                        } else {
+                            pnl -= sold * kLatePurchasePrice;
+                        }
                     }
+                    returns[i] = pnl;
                 }
-                returns.push_back(pnl);
             }
 
             return returns;
         }
 
+        /*
         std::vector<double> AirlineSeatsState::Rewards() const {
             SPIEL_CHECK_FALSE(IsChanceNode());
             std::vector<double> rewards;
@@ -287,6 +295,7 @@ namespace open_spiel {
 
             return rewards;
         }
+         */
 
         void AirlineSeatsState::ObservationTensor(Player player, absl::Span<float> values) const {
             return InformationStateTensor(player, values);
