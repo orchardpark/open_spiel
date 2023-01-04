@@ -86,6 +86,7 @@ namespace open_spiel {
             [[nodiscard]] std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
 
             [[nodiscard]] std::vector<Action> LegalActions() const override;
+            //[[nodiscard]] std::string Serialize() const override;
 
         protected:
             void DoApplyAction(Action move) override;
@@ -93,15 +94,17 @@ namespace open_spiel {
         private:
             // rng
             double RAND();
-            std::shared_ptr<const AirlineSeatsGame> airlineSeatsGame_;
 
             // helper function
             [[nodiscard]] bool IsOutOfSeats(Player player) const;
 
             // action functions
             void DoApplyActionInitialConditions();
+
             void DoApplyActionSeatBuying(Action move);
+
             void DoApplyActionPriceSetting(Action move);
+
             void DoApplyActionDemandSimulation();
 
             // variables that maintain the state (history) of the game
@@ -140,12 +143,17 @@ namespace open_spiel {
 
             double MaxUtility() const override;
 
-            std::mt19937 RNG() const;
+            std::string GetRNGState() const override;
+
+            void SetRNGState(const std::string &rng_state) const override;
+
 
         private:
-            // Number of players.
-            int num_players_;
+            friend class AirlineSeatsState;
             mutable std::mt19937 rng_;
+            unsigned long RNG() const;
+            unsigned long RNGMax() const;
+            int num_players_;
         };
 
     }  // namespace arline_seats

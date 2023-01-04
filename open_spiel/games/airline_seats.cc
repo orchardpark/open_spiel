@@ -42,6 +42,7 @@ namespace open_spiel {
             constexpr int kInitialPurchasePrice = 50;
             constexpr int kLatePurchasePrice = 80;
             constexpr int kInitialPlayer = 0;
+            constexpr int kDefaultSeed = 2139;
 
 // Facts about the game
             const GameType kGameType{/*short_name=*/"airline_seats",
@@ -58,7 +59,8 @@ namespace open_spiel {
                     /*provides_observation_string=*/true,
                     /*provides_observation_tensor=*/true,
                     /*parameter_specification=*/
-                                                    {{"players", GameParameter(kDefaultPlayers)}},
+                                                    {{"players", GameParameter(kDefaultPlayers)},
+                                                     {"rng_seed", GameParameter(kDefaultSeed)}},
                     /*default_loadable=*/true,
                     /*provides_factored_observation_string=*/true,
             };
@@ -72,7 +74,6 @@ namespace open_spiel {
 
         AirlineSeatsState::AirlineSeatsState(std::shared_ptr<const Game> game)
                 : State(game),
-                  airlineSeatsGame_(std::static_pointer_cast<const AirlineSeatsGame>(game)),
                   round_(kInitialRound),
                   boughtSeats_(num_players_),
                   sold_(num_players_),
@@ -160,7 +161,9 @@ namespace open_spiel {
         }
 
         double AirlineSeatsState::RAND() {
-            return (double) airlineSeatsGame_->RNG()() / (double) airlineSeatsGame_->RNG().max();
+            auto rng = std::static_pointer_cast<const AirlineSeatsGame>(game_)->RNG();
+            auto rngMax = std::static_pointer_cast<const AirlineSeatsGame>(game_)->RNGMax();
+            return (double) rng / (double) rngMax;
         }
 
         void AirlineSeatsState::DoApplyActionSeatBuying(Action move) {
@@ -310,7 +313,7 @@ namespace open_spiel {
             }
 
             std::string sold;
-            for (int j = 0; j < kMaxRounds; j++) {
+            for (int j = 0; j < round_; j++) {
                 absl::StrAppendFormat(&sold, "%d:", j);
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
@@ -318,7 +321,7 @@ namespace open_spiel {
             }
 
             std::string prices;
-            for (int j = 0; j < kMaxRounds; j++) {
+            for (int j = 0; j < round_; j++) {
                 absl::StrAppendFormat(&prices, "%d:", j);
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
@@ -374,15 +377,20 @@ namespace open_spiel {
         void AirlineSeatsState::InformationStateTensor(Player player, absl::Span<float> values) const {
             SPIEL_CHECK_GE(player, 0);
             SPIEL_CHECK_LT(player, num_players_);
-            State::InformationStateTensor(player, values);
+            SPIEL_CHECK_EQ(values.size(), game_->InformationStateTensorSize());
+            std::fill(values.begin(), values.end(), 0);
         }
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
-                  rng_(time(nullptr)),
-                  num_players_(ParameterValue<int>("players")) {
+                  num_players_(ParameterValue<int>("players")),
+                  rng_(std::mt19937(ParameterValue<int>("rng_seed") == -1
+                                    ? std::time(0)
+                                    : ParameterValue<int>("rng_seed")))
+                  {
             SPIEL_CHECK_GE(num_players_, kGameType.min_num_players);
             SPIEL_CHECK_LE(num_players_, kGameType.max_num_players);
+            std::cout << "Number of players: " << num_players_ << std::endl;
         }
 
         std::unique_ptr<State> AirlineSeatsGame::NewInitialState() const {
@@ -428,9 +436,24 @@ namespace open_spiel {
             return 5000;
         }
 
-        std::mt19937 AirlineSeatsGame::RNG() const {
-            return rng_;
+        std::string AirlineSeatsGame::GetRNGState() const {
+            std::ostringstream rng_stream;
+            rng_stream << rng_;
+            return rng_stream.str();
         }
+
+        void AirlineSeatsGame::SetRNGState(const std::string &rng_state) const {
+            if (rng_state.empty()) return;
+            std::istringstream rng_stream(rng_state);
+            rng_stream >> rng_;
+        }
+
+        unsigned long AirlineSeatsGame::RNG() const { return rng_(); }
+
+        unsigned long AirlineSeatsGame::RNGMax() const {
+            return rng_.max();
+        }
+
 
     }  // namespace airline_seats
 }  // namespace open_spiel
