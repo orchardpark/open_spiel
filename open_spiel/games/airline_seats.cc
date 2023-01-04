@@ -242,7 +242,7 @@ namespace open_spiel {
         std::vector<double> AirlineSeatsState::Returns() const {
             std::vector<double> returns;
             for (Player i = kInitialPlayer; i < num_players_; i++) {
-                double pnl = boughtSeats_[i] * kInitialPurchasePrice;
+                double pnl = boughtSeats_[i] * -kInitialPurchasePrice;
                 int seatsLeft = boughtSeats_[i];
                 for (int round = kInitialRound; round < round_; round++) {
                     int sold = sold_[i][round];
@@ -262,22 +262,27 @@ namespace open_spiel {
         }
 
         std::vector<double> AirlineSeatsState::Rewards() const {
+            SPIEL_CHECK_FALSE(IsChanceNode());
             std::vector<double> rewards;
             for (Player i = kInitialPlayer; i < num_players_; i++) {
-                double pnl = boughtSeats_[i] * kInitialPurchasePrice;
-                int seatsLeft = boughtSeats_[i];
-                for (int round = kInitialRound; round < round_; round++) {
-                    int sold = sold_[i][round];
-                    double price = prices_[i][round];
-                    pnl += sold * price;
-                    if (seatsLeft > 0) {
-                        seatsLeft -= sold;
-                        if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
-                    } else {
-                        pnl -= sold * kLatePurchasePrice;
+                if(i!=PreviousPlayer()) rewards.push_back(0);
+                else if(round_==0) rewards.push_back(boughtSeats_[i] * -kInitialPurchasePrice);
+                else{
+                    int seatsLeft = boughtSeats_[i];
+                    for (int round = kInitialRound; round < round_; round++) {
+                        int sold = sold_[i][round];
+                        double price = prices_[i][round];
+                        double pnl = sold * price;
+                        if (seatsLeft > 0) {
+                            seatsLeft -= sold;
+                            if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
+                        } else {
+                            pnl -= sold * kLatePurchasePrice;
+                        }
+                        if(round == round_-1)
+                            rewards.push_back(pnl);
                     }
                 }
-                rewards.push_back(pnl);
             }
 
             return rewards;
@@ -388,6 +393,12 @@ namespace open_spiel {
 
             return result;
         }
+
+        Player AirlineSeatsState::PreviousPlayer() const {
+            if(currentPlayer_ ==0) return num_players_-1;
+            else return currentPlayer_-1;
+        }
+
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),

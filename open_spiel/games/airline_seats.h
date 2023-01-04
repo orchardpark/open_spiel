@@ -106,6 +106,7 @@ namespace open_spiel {
             void DoApplyActionPriceSetting(Action move);
 
             void DoApplyActionDemandSimulation();
+            Player PreviousPlayer() const;
 
             // variables that maintain the state (history) of the game
             std::vector<int> boughtSeats_; // how many seats were bought initially per player
