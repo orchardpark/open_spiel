@@ -107,8 +107,9 @@ namespace open_spiel {
         }
 
         std::vector<Action> AirlineSeatsState::LegalActions() const {
+            if(IsTerminal()) return {};
             // implicit stochastic
-            if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
+            else if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
                 // seat buying
             else if (phase_ == GamePhase::SeatBuying) {
                 std::vector<Action> actions(150);
