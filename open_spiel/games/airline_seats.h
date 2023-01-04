@@ -19,7 +19,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
 #include "open_spiel/policy.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
@@ -37,20 +36,6 @@ namespace open_spiel {
             PriceSetting,
             DemandSimulation
         };
-
-        enum ActionType {
-            Buy0 = 0,
-            Buy5 = 1,
-            Buy10 = 2,
-            Buy15 = 3,
-            Buy20 = 4,
-            SetPrice50 = 5,
-            SetPrice55 = 6,
-            SetPrice60 = 7,
-            SetPrice65 = 8,
-            SetPrice70 = 9,
-        };
-
         class AirlineSeatsGame;
 
         class AirlineSeatsState : public State {

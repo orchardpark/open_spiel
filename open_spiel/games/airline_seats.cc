@@ -18,7 +18,6 @@
 #include <array>
 #include <string>
 #include <utility>
-
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
 #include "open_spiel/game_parameters.h"
 #include "open_spiel/observer.h"
@@ -100,10 +99,10 @@ namespace open_spiel {
                 return "InitialConditions";
             } else if (phase_ == GamePhase::DemandSimulation) {
                 return "DemandSimulation";
-            } else if (move < 5) {
-                return absl::StrCat("Buy:", (move) * 5);
+            } else if (move < 150) {
+                return absl::StrCat("Buy:", move);
             } else {
-                return absl::StrCat("SetPrice:", 50 + (move - 5) * 5);
+                return absl::StrCat("SetPrice:", move-150);
             }
         }
 
@@ -112,11 +111,15 @@ namespace open_spiel {
             if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
                 // seat buying
             else if (phase_ == GamePhase::SeatBuying) {
-                return {0, 1, 2, 3, 4};
+                std::vector<Action> actions(150);
+                std::iota(actions.begin(), actions.end(), 0);
+                return actions;
             }
                 // pricing
             else {
-                return {5, 6, 7, 8, 9};
+                std::vector<Action> actions(150);
+                std::iota(actions.begin(), actions.end(), 150);
+                return actions;
             }
         }
 
@@ -168,7 +171,7 @@ namespace open_spiel {
 
         void AirlineSeatsState::DoApplyActionSeatBuying(Action move) {
             // update the state by how much the player bought
-            boughtSeats_[currentPlayer_] = (int) (move) * 5;
+            boughtSeats_[currentPlayer_] = (int)move;
             currentPlayer_++;
 
             // once everyone has bought their seats, start setting prices
@@ -179,7 +182,7 @@ namespace open_spiel {
         }
 
         void AirlineSeatsState::DoApplyActionPriceSetting(Action move) {
-            auto price = (int) (move - 5) * 5 + 50;
+            auto price = (int) (move - 150);
             prices_[currentPlayer_].push_back(price);
             currentPlayer_++;
 
@@ -462,8 +465,8 @@ namespace open_spiel {
         }
 
         int AirlineSeatsGame::NumDistinctActions() const {
-            // hardcoded for now, 5 buy qty and 6 price setting (including setting no price)
-            return 10;
+            // 150 for initial seat buying (0 to 149 seats), 150 for price setting (0 to 149)
+            return 300;
         }
 
         int AirlineSeatsGame::MaxChanceNodesInHistory() const {
@@ -480,7 +483,7 @@ namespace open_spiel {
         }
 
         double AirlineSeatsGame::MinUtility() const {
-            return -1000;
+            return -100000;
         }
 
         double AirlineSeatsGame::MaxUtility() const {
