@@ -109,7 +109,7 @@ namespace open_spiel {
 
         std::vector<Action> AirlineSeatsState::LegalActions() const {
             // implicit stochastic
-            if (phase_ == GamePhase::InitialConditions) return {0};
+            if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
                 // seat buying
             else if (phase_ == GamePhase::SeatBuying) {
                 return {1, 2, 3, 4, 5};
@@ -172,7 +172,7 @@ namespace open_spiel {
             currentPlayer_++;
 
             // once everyone has bought their seats, start setting prices
-            if (currentPlayer_ > num_players_) {
+            if (currentPlayer_ >= num_players_) {
                 currentPlayer_ = kInitialPlayer;
                 phase_ = GamePhase::PriceSetting;
             }
@@ -184,7 +184,7 @@ namespace open_spiel {
             currentPlayer_++;
 
             // move on to demand simulation
-            if (currentPlayer_ > num_players_) {
+            if (currentPlayer_ >= num_players_) {
                 phase_ = GamePhase::DemandSimulation;
                 currentPlayer_ = kChancePlayerId;
             }
