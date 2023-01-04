@@ -384,12 +384,29 @@ namespace open_spiel {
             return output;
         }
 
-        // TODO
         void AirlineSeatsState::InformationStateTensor(Player player, absl::Span<float> values) const {
             SPIEL_CHECK_GE(player, 0);
             SPIEL_CHECK_LT(player, num_players_);
             SPIEL_CHECK_EQ(values.size(), game_->InformationStateTensorSize());
             std::fill(values.begin(), values.end(), 0);
+            int offset = 0;
+            values[offset+round_] = 1;
+            offset+=kMaxRounds;
+            values[offset+currentPlayer_] = 1;
+            offset+=num_players_;
+            values[offset] = (float)boughtSeats_[player];
+            offset++;
+            for (int j = 0; j < round_; j++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
+                    values[offset] = (float)sold_[i][j];
+                }
+            }
+            offset+=kMaxRounds*num_players_;
+            for (int j = 0; j < round_; j++) {
+                for (Player i = kInitialPlayer; i < num_players_; i++) {
+                    values[offset] = (float)prices_[i][j];
+                }
+            }
         }
 
         std::string AirlineSeatsState::Serialize() const {
@@ -447,8 +464,8 @@ namespace open_spiel {
         }
 
         std::vector<int> AirlineSeatsGame::InformationStateTensorShape() const {
-            // round + player + seats at beginning + (seats sold) previous rounds + prices set
-            return {1 + 1 + 1 + num_players_ * kMaxRounds + num_players_ * kMaxRounds};
+            // round (one hot) + player (one hot) + seats at beginning + (seats sold) previous rounds + prices set
+            return {kMaxRounds + num_players_ + 1 + num_players_ * kMaxRounds + num_players_ * kMaxRounds};
         }
 
         std::vector<int> AirlineSeatsGame::ObservationTensorShape() const {
