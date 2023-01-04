@@ -112,7 +112,6 @@ namespace open_spiel {
             int round_;
             GamePhase phase_;
             Player currentPlayer_;
-            Player winner_;
 
             [[nodiscard]] bool ActionInActions(Action move) const;
         };

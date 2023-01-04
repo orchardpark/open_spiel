@@ -72,7 +72,6 @@ namespace open_spiel {
         AirlineSeatsState::AirlineSeatsState(std::shared_ptr<const Game> game)
                 : State(game),
                   airlineSeatsGame_(std::static_pointer_cast<const AirlineSeatsGame>(game)),
-                  winner_(kInvalidPlayer),
                   round_(kInitialRound),
                   boughtSeats_(num_players_),
                   sold_(num_players_),
@@ -297,6 +296,62 @@ namespace open_spiel {
             return InformationStateString(player);
         }
 
+        std::string AirlineSeatsState::ToString() const {
+            std::string phase;
+            switch (phase_) {
+                case GamePhase::InitialConditions:
+                    phase = "IC";
+                    break;
+                case GamePhase::SeatBuying:
+                    phase = "SB";
+                    break;
+                case GamePhase::PriceSetting:
+                    phase = "PS";
+                    break;
+                case GamePhase::DemandSimulation:
+                    phase = "DS";
+                    break;
+            }
+            std::string boughtSeats;
+            for(Player i=1; i<=num_players_; i++)
+            {
+                absl::StrAppendFormat(&boughtSeats, "%d,", boughtSeats_[i-1]);
+            }
+
+            std::string sold;
+            for(int j=0; j<kMaxRounds; j++)
+            {
+                absl::StrAppendFormat(&sold, "%d:", j);
+                for(Player i=1; i<=num_players_; i++)
+                {
+                    absl::StrAppendFormat(&sold, "%d,", sold_[i][j]);
+                }
+            }
+
+            std::string prices;
+            for(int j=0; j<kMaxRounds; j++)
+            {
+                absl::StrAppendFormat(&prices, "%d:", j);
+                for(Player i=1; i<=num_players_; i++)
+                {
+                    absl::StrAppendFormat(&prices, "%d,", prices_[i][j]);
+                }
+            }
+            
+
+            std::string output = absl::StrFormat("%d|%f|%d|%s|%s|%s|%s",
+                                                 round_,
+                                                 c1_,
+                                                 currentPlayer_,
+                                                 phase.c_str(),
+                                                 boughtSeats.c_str(),
+                                                 sold.c_str(),
+                                                 prices.c_str()
+                                                 );
+
+            return output;
+        }
+
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
                   rng_(time(nullptr)),
@@ -324,7 +379,7 @@ namespace open_spiel {
 
         int AirlineSeatsGame::NumDistinctActions() const {
             // hardcoded for now, 5 buy qty and 6 price setting (including setting no price)
-            return 11;
+            return 10;
         }
 
         int AirlineSeatsGame::MaxChanceNodesInHistory() const {
