@@ -102,7 +102,7 @@ namespace open_spiel {
             } else if (move < 150) {
                 return absl::StrCat("Buy:", move);
             } else {
-                return absl::StrCat("SetPrice:", move-150);
+                return absl::StrCat("SetPrice:", move-149);
             }
         }
 
@@ -183,7 +183,7 @@ namespace open_spiel {
         }
 
         void AirlineSeatsState::DoApplyActionPriceSetting(Action move) {
-            auto price = (int) (move - 150);
+            auto price = (int) (move - 149);
             prices_[currentPlayer_].push_back(price);
             currentPlayer_++;
 
@@ -466,7 +466,7 @@ namespace open_spiel {
         }
 
         int AirlineSeatsGame::NumDistinctActions() const {
-            // 150 for initial seat buying (0 to 149 seats), 150 for price setting (0 to 149)
+            // 150 for initial seat buying (0 to 149 seats), 150 for price setting (1 to 150)
             return 300;
         }
 
@@ -555,7 +555,6 @@ namespace open_spiel {
                     state->prices_[i].push_back(std::stoi(prices[i+j*num_players_]));
                 }
             }
-            std::cout << "repr:" << state->ToString() << std::endl;
 
             return state;
 
