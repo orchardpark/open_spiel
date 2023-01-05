@@ -54,7 +54,7 @@ namespace open_spiel {
 
             [[nodiscard]] std::vector<double> Returns() const override;
 
-            //[[nodiscard]] std::vector<double> Rewards() const override;
+            [[nodiscard]] std::vector<double> Rewards() const override;
 
             [[nodiscard]] std::string InformationStateString(Player player) const override;
 
@@ -80,9 +80,6 @@ namespace open_spiel {
             // rng
             double RAND();
 
-            // helper function
-            [[nodiscard]] bool IsOutOfSeats(Player player) const;
-
             // action functions
             void DoApplyActionInitialConditions();
 
@@ -91,7 +88,6 @@ namespace open_spiel {
             void DoApplyActionPriceSetting(Action move);
 
             void DoApplyActionDemandSimulation();
-            Player PreviousPlayer() const;
 
             // variables that maintain the state (history) of the game
             std::vector<int> boughtSeats_; // how many seats were bought initially per player

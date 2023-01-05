@@ -101,27 +101,27 @@ namespace open_spiel {
                 return "DemandSimulation";
             } else if (move < 150) {
                 return absl::StrCat("Buy:", move);
-            } else {
+            } else{
                 return absl::StrCat("SetPrice:", move-149);
             }
         }
 
         std::vector<Action> AirlineSeatsState::LegalActions() const {
             if(IsTerminal()) return {};
-            // implicit stochastic
-            else if (phase_ == GamePhase::InitialConditions || phase_ == GamePhase::DemandSimulation) return {0};
-                // seat buying
-            else if (phase_ == GamePhase::SeatBuying) {
-                std::vector<Action> actions(150);
-                std::iota(actions.begin(), actions.end(), 0);
-                return actions;
+
+            std::vector<Action> actions(150);
+            switch (phase_) {
+                case GamePhase::InitialConditions: case GamePhase::DemandSimulation:
+                    return {0};
+                case GamePhase::SeatBuying:
+                    std::iota(actions.begin(), actions.end(), 0);
+                    return actions;
+                case GamePhase::PriceSetting:
+                    std::iota(actions.begin(), actions.end(), 150);
+                    return actions;
             }
-                // pricing
-            else {
-                std::vector<Action> actions(150);
-                std::iota(actions.begin(), actions.end(), 150);
-                return actions;
-            }
+            return {0};
+
         }
 
         void AirlineSeatsState::DoApplyAction(Action move) {
@@ -247,15 +247,9 @@ namespace open_spiel {
 
         }
 
-        bool AirlineSeatsState::IsOutOfSeats(Player player) const {
-            auto playerSold = std::accumulate(sold_[player].begin(), sold_[player].end(), 0);
-            auto playerBought = boughtSeats_[player];
-            return playerSold >= playerBought;
-        }
-
         std::vector<double> AirlineSeatsState::Returns() const {
             std::vector<double> returns(num_players_, 0.0);
-            if(IsTerminal()) {
+            if(phase_!=GamePhase::SeatBuying) {
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
                     double pnl = boughtSeats_[i] * -kInitialPurchasePrice;
                     int seatsLeft = boughtSeats_[i];
@@ -277,34 +271,40 @@ namespace open_spiel {
             return returns;
         }
 
-        /*
         std::vector<double> AirlineSeatsState::Rewards() const {
             SPIEL_CHECK_FALSE(IsChanceNode());
-            std::vector<double> rewards;
-            for (Player i = kInitialPlayer; i < num_players_; i++) {
-                if(i!=PreviousPlayer()) rewards.push_back(0);
-                else if(round_==0) rewards.push_back(boughtSeats_[i] * -kInitialPurchasePrice);
-                else{
-                    int seatsLeft = boughtSeats_[i];
-                    for (int round = kInitialRound; round < round_; round++) {
-                        int sold = sold_[i][round];
-                        double price = prices_[i][round];
-                        double pnl = sold * price;
-                        if (seatsLeft > 0) {
-                            seatsLeft -= sold;
-                            if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
-                        } else {
-                            pnl -= sold * kLatePurchasePrice;
+            std::vector<double> rewards(num_players_, 0.0);
+            if(currentPlayer_ == 0 || currentPlayer_ == kTerminalPlayerId)
+            {
+                if(round_ == 0)
+                {
+                    for(Player i=kInitialPlayer; i<num_players_; i++)
+                    {
+                        rewards[i] = boughtSeats_[i]*-kInitialPurchasePrice;
+                    }
+                }
+                else
+                {
+                    for(Player i=kInitialPlayer; i<num_players_; i++) {
+                        int seatsLeft = boughtSeats_[i];
+                        for (int round = kInitialRound; round < round_; round++) {
+                            int sold = sold_[i][round];
+                            double price = prices_[i][round];
+                            double pnl = sold * price;
+                            if (seatsLeft > 0) {
+                                seatsLeft -= sold;
+                                if (seatsLeft < 0) pnl -= -seatsLeft * kLatePurchasePrice;
+                            } else {
+                                pnl -= sold * kLatePurchasePrice;
+                            }
+                            rewards[i] = pnl;
                         }
-                        if(round == round_-1)
-                            rewards.push_back(pnl);
                     }
                 }
             }
 
             return rewards;
         }
-         */
 
         void AirlineSeatsState::ObservationTensor(Player player, absl::Span<float> values) const {
             return InformationStateTensor(player, values);
@@ -405,17 +405,17 @@ namespace open_spiel {
             offset+=kMaxRounds;
             values[offset+currentPlayer_] = 1;
             offset+=num_players_;
-            values[offset] = (float)boughtSeats_[player];
+            values[offset] = (float)boughtSeats_[player]/150.0f;
             offset++;
             for (int j = 0; j < round_; j++) {
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
-                    values[offset] = (float)sold_[i][j];
+                    values[offset] = (float)sold_[i][j]/150.0f;
                 }
             }
             offset+=kMaxRounds*num_players_;
             for (int j = 0; j < round_; j++) {
                 for (Player i = kInitialPlayer; i < num_players_; i++) {
-                    values[offset] = (float)prices_[i][j];
+                    values[offset] = (float)prices_[i][j]/150.0f;
                 }
             }
         }
@@ -430,12 +430,6 @@ namespace open_spiel {
 
             return result;
         }
-
-        Player AirlineSeatsState::PreviousPlayer() const {
-            if(currentPlayer_ ==0) return num_players_-1;
-            else return currentPlayer_-1;
-        }
-
 
         AirlineSeatsGame::AirlineSeatsGame(const GameParameters &params)
                 : Game(kGameType, params),
